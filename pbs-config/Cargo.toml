@@ -28,6 +28,7 @@ proxmox-s3-client.workspace = true
 proxmox-schema.workspace = true
 proxmox-section-config.workspace = true
 proxmox-shared-memory.workspace = true
+proxmox-simple-config.workspace = true
 proxmox-sys = { workspace = true, features = [ "acl", "crypt", "timer" ] }
 proxmox-time.workspace = true
 proxmox-uuid.workspace = true

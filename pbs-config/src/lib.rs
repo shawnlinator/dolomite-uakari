@@ -16,7 +16,6 @@ pub mod datastore;
 pub mod domains;
 pub mod drive;
 pub mod encryption_keys;
-pub mod key_value;
 pub mod media_pool;
 pub mod metrics;
 pub mod node;

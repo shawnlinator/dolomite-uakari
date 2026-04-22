@@ -24,7 +24,7 @@ pub fn config() -> Result<(NodeConfig, [u8; 32]), Error> {
     let content = proxmox_sys::fs::file_read_optional_string(CONF_FILE)?.unwrap_or_default();
 
     let digest = openssl::sha::sha256(content.as_bytes());
-    let data: NodeConfig = crate::key_value::from_str(&content, &NodeConfig::API_SCHEMA)?;
+    let data: NodeConfig = proxmox_simple_config::from_str(&content, &NodeConfig::API_SCHEMA)?;
 
     Ok((data, digest))
 }
@@ -46,11 +46,63 @@ pub fn save_config(config: &NodeConfig) -> Result<(), Error> {
         dummy_acceptor.set_cipher_list(ciphers)?;
     }
 
-    let raw = crate::key_value::to_bytes(config, &NodeConfig::API_SCHEMA)?;
+    let raw = proxmox_simple_config::to_bytes(config, &NodeConfig::API_SCHEMA)?;
     replace_privileged_config(CONF_FILE, &raw)
 }
 
 pub fn node_http_proxy_config() -> Result<Option<ProxyConfig>, Error> {
     let (node_config, _digest) = self::config()?;
     Ok(node_config.http_proxy())
+}
+
+#[cfg(test)]
+mod tests {
+    use pbs_api_types::NodeConfig;
+    use proxmox_schema::ApiType;
+
+    #[test]
+    fn node_config_roundtrip() {
+        const NODE_CONFIG: &str = "\
+            acme: account=pebble\n\
+            acmedomain0: test1.invalid.local,plugin=power\n\
+            acmedomain1: test2.invalid.local\n\
+        ";
+
+        let data: NodeConfig =
+            proxmox_simple_config::from_str(NODE_CONFIG, &NodeConfig::API_SCHEMA)
+                .expect("failed to parse node config");
+
+        let raw = proxmox_simple_config::to_bytes(&data, &NodeConfig::API_SCHEMA)
+            .expect("failed to serialize node config");
+
+        assert_eq!(raw, NODE_CONFIG.as_bytes());
+    }
+
+    #[test]
+    fn node_config_with_description_roundtrip() {
+        const NODE_INPUT: &str = "\
+            #this should\n\
+            #be included\n\
+            acme: account=pebble\n\
+            # this should not\n\
+            acmedomain0: test1.invalid.local,plugin=power\n\
+            acmedomain1: test2.invalid.local\n\
+        ";
+
+        const NODE_OUTPUT: &str = "\
+            #this should\n\
+            #be included\n\
+            acme: account=pebble\n\
+            acmedomain0: test1.invalid.local,plugin=power\n\
+            acmedomain1: test2.invalid.local\n\
+        ";
+
+        let data: NodeConfig = proxmox_simple_config::from_str(NODE_INPUT, &NodeConfig::API_SCHEMA)
+            .expect("failed to parse node config with description");
+
+        let raw = proxmox_simple_config::to_bytes(&data, &NodeConfig::API_SCHEMA)
+            .expect("failed to serialize node config with description");
+
+        assert_eq!(raw, NODE_OUTPUT.as_bytes());
+    }
 }
