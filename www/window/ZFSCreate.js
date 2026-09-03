@@ -72,6 +72,14 @@ Ext.define('PBS.window.CreateZFS', {
                     value: '12',
                     name: 'ashift',
                 },
+                {
+                    xtype: 'proxmoxtextfield',
+                    name: 'recordsize',
+                    fieldLabel: gettext('Record Size'),
+                    allowBlank: true,
+                    validator: PBS.Utils.validateZfsRecordSize,
+                    emptyText: '128k'
+                },
             ],
             columnB: [
                 {

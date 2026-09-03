@@ -7,8 +7,8 @@ use proxmox_schema::api;
 
 use pbs_api_types::{
     DATASTORE_SCHEMA, DISK_ARRAY_SCHEMA, DISK_LIST_SCHEMA, DataStoreConfig, NODE_SCHEMA,
-    PRIV_SYS_AUDIT, PRIV_SYS_MODIFY, UPID_SCHEMA, ZFS_ASHIFT_SCHEMA, ZPOOL_NAME_SCHEMA,
-    ZfsCompressionType, ZfsRaidLevel, ZpoolListItem,
+    PRIV_SYS_AUDIT, PRIV_SYS_MODIFY, UPID_SCHEMA, ZFS_ASHIFT_SCHEMA, ZFS_RECORD_SIZE_SCHEMA,
+    ZPOOL_NAME_SCHEMA, ZfsCompressionType, ZfsRaidLevel, ZpoolListItem,
 };
 
 use crate::tools::disks::{
@@ -138,6 +138,10 @@ pub fn zpool_details(name: String) -> Result<Value, Error> {
                 type: bool,
                 optional: true,
             },
+            recordsize: {
+                schema: ZFS_RECORD_SIZE_SCHEMA,
+                optional: true,
+            }
         },
     },
     returns: {
@@ -155,6 +159,7 @@ pub fn create_zpool(
     compression: Option<String>,
     ashift: Option<usize>,
     add_datastore: Option<bool>,
+    recordsize: Option<String>,
     rpcenv: &mut dyn RpcEnvironment,
 ) -> Result<String, Error> {
     let to_stdout = rpcenv.env_type() == RpcEnvironmentType::CLI;
@@ -292,6 +297,11 @@ pub fn create_zpool(
             if let Some(compression) = compression {
                 command.arg(format!("compression={compression}"));
             }
+
+            if let Some(recordsize) = recordsize {
+                command.arg(format!("recordsize={recordsize}"));
+            }
+
             command.args(["relatime=on", &name]);
             info!("# {command:?}");
             match proxmox_sys::command::run_command(command, None) {
