@@ -6,8 +6,7 @@ use proxmox_schema::api;
 use std::io::IsTerminal;
 
 use pbs_api_types::{
-    BLOCKDEVICE_DISK_AND_PARTITION_NAME_SCHEMA, BLOCKDEVICE_NAME_SCHEMA, DATASTORE_SCHEMA,
-    DISK_LIST_SCHEMA, ZFS_ASHIFT_SCHEMA, ZfsCompressionType, ZfsRaidLevel,
+    BLOCKDEVICE_DISK_AND_PARTITION_NAME_SCHEMA, BLOCKDEVICE_NAME_SCHEMA, DATASTORE_SCHEMA, DISK_LIST_SCHEMA, ZFS_ASHIFT_SCHEMA, ZFS_RECORD_SIZE_SCHEMA, ZfsCompressionType, ZfsRaidLevel
 };
 use proxmox_backup::tools::disks::{
     FileSystemType, SmartAttribute, complete_disk_name, complete_partition_name,
@@ -204,6 +203,11 @@ async fn wipe_disk(mut param: Value, rpcenv: &mut dyn RpcEnvironment) -> Result<
                 type: bool,
                 optional: true,
             },
+            recordsize: {
+                schema: ZFS_RECORD_SIZE_SCHEMA,
+                optional: true,
+            }
+
        },
    },
 )]
