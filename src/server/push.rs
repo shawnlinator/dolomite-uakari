@@ -1454,6 +1454,13 @@ pub(crate) async fn push_snapshot(
     } else {
         target_manifest.signature = source_manifest.signature.clone();
     };
+
+    if let Some(unprotected) = target_manifest.unprotected.as_object_mut() {
+        unprotected.remove("verify_state");
+    } else {
+        bail!("Encountered unexpected manifest without 'unprotected' section.");
+    }
+
     // FIXME: replace me with to_data_blob once there is an upload_blob
     let manifest_string =
         target_manifest.to_string(encrypt_using_key.map(|(_, config)| config).as_deref())?;
