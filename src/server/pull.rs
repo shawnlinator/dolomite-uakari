@@ -455,7 +455,7 @@ async fn pull_single_archive<'a>(
         .with_context(|| archive_prefix.clone())?
         .is_none()
     {
-        let _ = std::fs::remove_file(&tmp_path);
+        let _ = tokio::fs::remove_file(&tmp_path).await;
         bail!("{archive_prefix}: archive missing on source");
     };
 
@@ -596,14 +596,14 @@ async fn pull_single_archive<'a>(
         }
     }
     let source_path = if crypt_config.is_some() {
-        if let Err(err) = std::fs::remove_file(&tmp_path) {
+        if let Err(err) = tokio::fs::remove_file(&tmp_path).await {
             bail!("{archive_prefix}: Failed to remove temp. file {tmp_path:?} failed - {err}");
         }
         tmp_dec_path
     } else {
         tmp_path
     };
-    if let Err(err) = std::fs::rename(&source_path, &path) {
+    if let Err(err) = tokio::fs::rename(&source_path, &path).await {
         bail!("{archive_prefix}: Atomic rename file {path:?} failed - {err}");
     }
 
@@ -662,7 +662,7 @@ async fn pull_snapshot<'a>(
         .await
         .with_context(|| prefix.clone())?
     else {
-        let _ = std::fs::remove_file(&tmp_manifest_name);
+        let _ = tokio::fs::remove_file(&tmp_manifest_name).await;
         log_sender
             .log(
                 Level::INFO,
@@ -713,7 +713,7 @@ async fn pull_snapshot<'a>(
         log_sender
             .log(Level::INFO, format!("{prefix}: no data changes"))
             .await?;
-        let _ = std::fs::remove_file(&tmp_manifest_name);
+        let _ = tokio::fs::remove_file(&tmp_manifest_name).await;
         Ok::<(), Error>(())
     };
 
@@ -752,7 +752,7 @@ async fn pull_snapshot<'a>(
         params.verified_only,
         params.encrypted_only,
     ) {
-        let _ = std::fs::remove_file(&tmp_manifest_name);
+        let _ = tokio::fs::remove_file(&tmp_manifest_name).await;
         log_sender
             .log(
                 Level::INFO,
@@ -893,7 +893,7 @@ async fn pull_snapshot<'a>(
         nix::unistd::fsync(tmp_manifest_file.as_raw_fd())?;
     }
 
-    if let Err(err) = std::fs::rename(&tmp_manifest_name, &manifest_name) {
+    if let Err(err) = tokio::fs::rename(&tmp_manifest_name, &manifest_name).await {
         bail!("{prefix}: Atomic rename file {manifest_name:?} failed - {err}");
     }
     if let DatastoreBackend::S3(s3_client) = backend {
@@ -913,8 +913,9 @@ async fn pull_snapshot<'a>(
 
     fetch_log(crypt_config).await?;
 
-    snapshot
-        .cleanup_unreferenced_files(&manifest)
+    let snapshot = snapshot.clone();
+    tokio::task::spawn_blocking(move || snapshot.cleanup_unreferenced_files(&manifest))
+        .await?
         .map_err(|err| format_err!("{prefix}: failed to cleanup unreferenced files - {err}"))?;
 
     Ok(Some(sync_stats))
