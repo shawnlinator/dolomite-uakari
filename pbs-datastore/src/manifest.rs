@@ -1,9 +1,14 @@
+use std::collections::HashSet;
+
 use anyhow::{Error, bail, format_err};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use pbs_api_types::{BackupArchiveName, BackupType, CryptMode, Fingerprint, SnapshotVerifyState};
+use pbs_api_types::{
+    BackupArchiveName, BackupType, CLIENT_LOG_BLOB_NAME, CryptMode, Fingerprint,
+    MANIFEST_BLOB_NAME, SnapshotVerifyState,
+};
 use pbs_tools::crypt_config::CryptConfig;
 
 use super::DataBlob;
@@ -294,6 +299,18 @@ impl BackupManifest {
         };
 
         Ok(Some(Deserialize::deserialize(value)?))
+    }
+
+    /// Returns the set of all files which might be encountered in
+    /// the snapshot represented by given manifest.
+    pub fn expected_files(&self) -> HashSet<BackupArchiveName> {
+        let mut expected = HashSet::new();
+        expected.insert(MANIFEST_BLOB_NAME.clone());
+        expected.insert(CLIENT_LOG_BLOB_NAME.clone());
+        self.files().iter().for_each(|item| {
+            expected.insert(item.filename.clone());
+        });
+        expected
     }
 }
 

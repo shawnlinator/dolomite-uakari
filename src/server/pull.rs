@@ -852,6 +852,7 @@ async fn pull_snapshot<'a>(
         sync_stats.add(stats);
     }
 
+    let files_to_keep = manifest.expected_files();
     if let Some(new_manifest) = new_manifest {
         let mut new_manifest = Arc::try_unwrap(new_manifest)
             .map_err(|_arc| {
@@ -914,7 +915,7 @@ async fn pull_snapshot<'a>(
     fetch_log(crypt_config).await?;
 
     let snapshot = snapshot.clone();
-    tokio::task::spawn_blocking(move || snapshot.cleanup_unreferenced_files(&manifest))
+    tokio::task::spawn_blocking(move || snapshot.cleanup_unreferenced_files(&files_to_keep))
         .await?
         .map_err(|err| format_err!("{prefix}: failed to cleanup unreferenced files - {err}"))?;
 

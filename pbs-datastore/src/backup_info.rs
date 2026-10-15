@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::prelude::OsStrExt;
@@ -16,8 +17,7 @@ use proxmox_systemd::escape_unit;
 
 use pbs_api_types::{
     ArchiveType, Authid, BACKUP_DATE_REGEX, BackupArchiveName, BackupGroupDeleteStats,
-    BackupNamespace, BackupType, CLIENT_LOG_BLOB_NAME, GroupFilter, MANIFEST_BLOB_NAME,
-    VerifyState,
+    BackupNamespace, BackupType, GroupFilter, MANIFEST_BLOB_NAME, VerifyState,
 };
 use pbs_config::{BackupLockGuard, open_backup_lockfile};
 
@@ -1029,16 +1029,16 @@ impl BackupDir {
         Ok(())
     }
 
-    /// Cleans up the backup directory by removing any file not mentioned in the manifest.
-    pub fn cleanup_unreferenced_files(&self, manifest: &BackupManifest) -> Result<(), Error> {
+    /// Removes any file in the backup directory not present in `files_to_keep`.
+    ///
+    /// The set is supplied by the caller (see `BackupManifest::expected_files`)
+    /// rather than derived here, so passing an incomplete set will delete files
+    /// that should be retained.
+    pub fn cleanup_unreferenced_files(
+        &self,
+        files_to_keep: &HashSet<BackupArchiveName>,
+    ) -> Result<(), Error> {
         let full_path = self.full_path();
-
-        let mut wanted_files = std::collections::HashSet::new();
-        wanted_files.insert(MANIFEST_BLOB_NAME.to_string());
-        wanted_files.insert(CLIENT_LOG_BLOB_NAME.to_string());
-        manifest.files().iter().for_each(|item| {
-            wanted_files.insert(item.filename.to_string());
-        });
 
         for item in proxmox_sys::fs::read_subdir(libc::AT_FDCWD, &full_path)?.flatten() {
             if let Some(file_type) = item.file_type() {
@@ -1051,7 +1051,7 @@ impl BackupDir {
                 continue;
             };
             if let Ok(name) = std::str::from_utf8(file_name) {
-                if wanted_files.contains(name) {
+                if files_to_keep.contains(name) {
                     continue;
                 }
             }
