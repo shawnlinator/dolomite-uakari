@@ -3,7 +3,6 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::io::Seek;
-use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -16,8 +15,6 @@ use super::sync::{
 use crate::backup::{check_ns_modification_privs, check_ns_privs};
 use crate::server::sync::SharedGroupProgress;
 use anyhow::{Context, Error, bail, format_err};
-use tokio::fs::OpenOptions;
-use tokio::io::AsyncWriteExt;
 
 use pbs_api_types::{
     ArchiveType, Authid, BackupDir, BackupGroup, BackupNamespace, CLIENT_LOG_BLOB_NAME, CryptMode,
@@ -717,6 +714,10 @@ async fn pull_snapshot<'a>(
         Ok::<(), Error>(())
     };
 
+    let mut manifest_data = tmp_manifest_blob.raw_data().to_vec();
+    let mut manifest =
+        BackupManifest::try_from(tmp_manifest_blob).with_context(|| prefix.clone())?;
+
     let existing_target_manifest = if manifest_name.exists() && !corrupt {
         let manifest_blob = proxmox_lang::try_block!({
             let mut manifest_file = std::fs::File::open(&manifest_name).map_err(|err| {
@@ -731,20 +732,25 @@ async fn pull_snapshot<'a>(
             format_err!("{prefix}: unable to read local manifest {manifest_name:?} - {err}")
         })?;
 
-        if manifest_blob.raw_data() == tmp_manifest_blob.raw_data() {
+        let existing_manifest =
+            BackupManifest::try_from(manifest_blob).with_context(|| prefix.clone())?;
+
+        // the target never inherits the source's verify state (see below), so a manifest that
+        // only differs in it means the snapshot did not change since it was last synced
+        if existing_manifest
+            .eq_ignoring_verify_state(&manifest)
+            .with_context(|| prefix.clone())?
+        {
             // requires no decryption since either none or both, source and target are encrypted
             fetch_log(None).await?;
             cleanup().await?;
             return Ok(Some(sync_stats)); // nothing changed
         }
 
-        Some(BackupManifest::try_from(manifest_blob).with_context(|| prefix.clone())?)
+        Some(existing_manifest)
     } else {
         None
     };
-
-    let mut manifest_data = tmp_manifest_blob.raw_data().to_vec();
-    let manifest = BackupManifest::try_from(tmp_manifest_blob).with_context(|| prefix.clone())?;
 
     if ignore_not_verified_or_encrypted(
         &manifest,
@@ -785,6 +791,7 @@ async fn pull_snapshot<'a>(
         }
     };
 
+    let mut archives_pulled = false;
     for item in manifest.files() {
         let path = snapshot.full_archive_path(&item.filename);
         if !corrupt && path.exists() {
@@ -838,6 +845,7 @@ async fn pull_snapshot<'a>(
             }
         }
 
+        archives_pulled = true;
         let stats = pull_single_archive(
             reader.clone(),
             snapshot,
@@ -852,8 +860,17 @@ async fn pull_snapshot<'a>(
         sync_stats.add(stats);
     }
 
+    // a verify state the target obtained on its own only covers the archives it had back then
+    let target_verify_state = if archives_pulled {
+        None
+    } else {
+        existing_target_manifest
+            .as_ref()
+            .and_then(|m| m.unprotected.get("verify_state").cloned())
+    };
     let files_to_keep = manifest.expected_files();
-    if let Some(new_manifest) = new_manifest {
+
+    let manifest_to_write = if let Some(new_manifest) = new_manifest {
         let mut new_manifest = Arc::try_unwrap(new_manifest)
             .map_err(|_arc| {
                 format_err!("failed to take ownership of still referenced new manifest")
@@ -879,24 +896,35 @@ async fn pull_snapshot<'a>(
             new_manifest.set_sync_source_signature(expected.bytes())?;
         }
 
-        // keep signature
-        let manifest_blob = new_manifest.to_data_blob(None)?;
-        // update contents to be uploaded to backend
-        manifest_data = manifest_blob.raw_data().to_vec();
+        Some(new_manifest)
+    } else if manifest.unprotected.get("verify_state") != target_verify_state.as_ref() {
+        // the manifest is copied as-is on the non-decrypted path: never inherit the
+        // source's verify state, but keep one the target obtained on its own
+        let Some(unprotected) = manifest.unprotected.as_object_mut() else {
+            bail!("{prefix}: unexpected manifest without 'unprotected' section");
+        };
+        match &target_verify_state {
+            Some(state) => {
+                unprotected.insert("verify_state".to_string(), state.clone());
+            }
+            None => {
+                unprotected.remove("verify_state");
+            }
+        }
 
-        let mut tmp_manifest_file = OpenOptions::new()
-            .write(true)
-            .truncate(true) // clear pre-existing manifest content
-            .open(&tmp_manifest_name)
-            .await?;
-        tmp_manifest_file.write_all(&manifest_data).await?;
-        tmp_manifest_file.flush().await?;
-        nix::unistd::fsync(tmp_manifest_file.as_raw_fd())?;
-    }
+        Some(manifest)
+    } else {
+        None
+    };
 
-    if let Err(err) = tokio::fs::rename(&tmp_manifest_name, &manifest_name).await {
+    if let Some(manifest) = manifest_to_write {
+        manifest_data =
+            tokio::task::spawn_blocking(move || manifest.write_to_path(&manifest_name)).await??;
+        let _ = tokio::fs::remove_file(&tmp_manifest_name).await;
+    } else if let Err(err) = tokio::fs::rename(&tmp_manifest_name, &manifest_name).await {
         bail!("{prefix}: Atomic rename file {manifest_name:?} failed - {err}");
     }
+
     if let DatastoreBackend::S3(s3_client) = backend {
         let object_key = pbs_datastore::s3::object_key_from_path(
             &snapshot.relative_path(),

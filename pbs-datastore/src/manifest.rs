@@ -1,9 +1,11 @@
 use std::collections::HashSet;
+use std::path::Path;
 
-use anyhow::{Error, bail, format_err};
-
+use anyhow::{Context, Error, bail, format_err};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+use proxmox_sys::fs::{CreateOptions, replace_file};
 
 use pbs_api_types::{
     BackupArchiveName, BackupType, CLIENT_LOG_BLOB_NAME, CryptMode, Fingerprint,
@@ -301,6 +303,33 @@ impl BackupManifest {
         Ok(Some(Deserialize::deserialize(value)?))
     }
 
+    /// Encode the manifest and atomically replace the file at `path` with it, so that concurrent
+    /// readers never observe a partially written manifest, and sync it to disk.
+    ///
+    /// Returns the raw blob data.
+    pub fn write_to_path(&self, path: &Path) -> Result<Vec<u8>, Error> {
+        let raw_data = self.to_data_blob(None)?.raw_data().to_vec();
+
+        replace_file(path, &raw_data, CreateOptions::new(), true)
+            .with_context(|| format!("failed to write manifest {path:?}"))?;
+
+        Ok(raw_data)
+    }
+
+    /// Whether this manifest describes the same snapshot as `other`, disregarding the verify
+    /// state, which a sync target obtains on its own instead of inheriting it from the source.
+    pub fn eq_ignoring_verify_state(&self, other: &Self) -> Result<bool, Error> {
+        let without_verify_state = |manifest: &Self| -> Result<Value, Error> {
+            let mut value = serde_json::to_value(manifest)?;
+            if let Some(unprotected) = value["unprotected"].as_object_mut() {
+                unprotected.remove("verify_state");
+            }
+            Ok(value)
+        };
+
+        Ok(without_verify_state(self)? == without_verify_state(other)?)
+    }
+
     /// Returns the set of all files which might be encountered in
     /// the snapshot represented by given manifest.
     pub fn expected_files(&self) -> HashSet<BackupArchiveName> {
@@ -543,6 +572,28 @@ fn test_manifest_present_signature() -> Result<(), Error> {
             }
         }
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_manifest_eq_ignoring_verify_state() -> Result<(), Error> {
+    let snapshot: pbs_api_types::BackupDir = "host/elsa/2020-06-26T13:56:05Z".parse()?;
+    let archive: BackupArchiveName = "root.pxar.didx".parse()?;
+
+    let mut source = BackupManifest::new(snapshot.clone());
+    source.add_file(&archive, 42, [1u8; 32], CryptMode::None)?;
+    let mut target = BackupManifest::new(snapshot);
+    target.add_file(&archive, 42, [1u8; 32], CryptMode::None)?;
+    assert!(source.eq_ignoring_verify_state(&target)?);
+
+    source.unprotected["verify_state"] = json!({ "state": "ok", "upid": "test" });
+    assert!(source.eq_ignoring_verify_state(&target)?);
+    target.unprotected["verify_state"] = json!({ "state": "failed", "upid": "test" });
+    assert!(source.eq_ignoring_verify_state(&target)?);
+
+    target.unprotected["notes"] = json!("changed");
+    assert!(!source.eq_ignoring_verify_state(&target)?);
 
     Ok(())
 }
