@@ -326,10 +326,12 @@ following settings for the management network.
 
 - *Interface Name Pinning*
 
-    Assigns fixed names to the network interfaces, based on their MAC
-    addresses, so that the names do not change after kernel, firmware, or
-    hardware changes. By default, the interfaces are named ``nic0``, ``nic1``,
-    and so on, but you can enter other names.
+    Assigns fixed names to the network interfaces, based on their MAC addresses,
+    so that the names do not change after kernel or firmware updates, or
+    hardware changes that keep the MAC addresses. By default, the interfaces are
+    named ``nic0``, ``nic1``, and so on, but you can enter other names. A
+    replacement interface with a different MAC address needs to be pinned again
+    after the installation, see :ref:`network_override_device_names`.
 
 - *Management Bond*
 

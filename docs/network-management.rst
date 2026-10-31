@@ -99,6 +99,8 @@ of **Configuration** or by using the ``dns`` subcommand of
 .. include:: traffic-control.rst
 
 
+.. _network_override_device_names:
+
 Overriding network device names
 -------------------------------
 
