@@ -211,7 +211,7 @@ impl KeyConfig {
 
             let derived_key = kdf.derive_key(&passphrase)?;
 
-            if raw_data.len() < 32 {
+            if raw_data.len() < EXPECTED_KEY_LEN + 1 {
                 bail!("Unable to decrypt key - short data");
             }
             let iv = &raw_data[0..16];
