@@ -30,6 +30,7 @@ use pbs_tape::{
     sg_tape::tape_alert_flags_critical,
 };
 use proxmox_rest_server::WorkerTask;
+use proxmox_worker_task::WorkerTaskContext;
 
 use crate::{
     api2::tape::restore::{fast_catalog_restore, restore_media},
@@ -1040,13 +1041,14 @@ pub fn barcode_label_media(
         drive.clone(),
         "barcode-label-media",
         Some(drive.clone()),
-        move |_worker, config| barcode_label_media_worker(drive, &config, pool),
+        move |worker, config| barcode_label_media_worker(&worker, drive, &config, pool),
     )?;
 
     Ok(upid_str.into())
 }
 
 fn barcode_label_media_worker(
+    worker: &WorkerTask,
     drive: String,
     drive_config: &SectionConfigData,
     pool: Option<String>,
@@ -1075,6 +1077,9 @@ fn barcode_label_media_worker(
         if label_text.starts_with("CLN") {
             continue;
         }
+
+        // loading and labeling a tape cannot be interrupted, so check before starting the next one
+        worker.check_abort()?;
 
         inventory.reload()?;
         match inventory.find_media_by_label_text(&label_text) {
@@ -1111,6 +1116,9 @@ fn barcode_label_media_worker(
                 continue;
             }
         }
+
+        // loading the media can take a while, so check again before writing the label
+        worker.check_abort()?;
 
         let ctime = proxmox_time::epoch_i64();
         let label = MediaLabel {
