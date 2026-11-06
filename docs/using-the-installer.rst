@@ -329,9 +329,11 @@ following settings for the management network.
     Assigns fixed names to the network interfaces, based on their MAC addresses,
     so that the names do not change after kernel or firmware updates, or
     hardware changes that keep the MAC addresses. By default, the interfaces are
-    named ``nic0``, ``nic1``, and so on, but you can enter other names. A
-    replacement interface with a different MAC address needs to be pinned again
-    after the installation, see :ref:`network_override_device_names`.
+    named ``nic0``, ``nic1``, and so on, but you can enter other names. Names of
+    the form ``bond<N>``, ``vlan<N>`` and ``vmbr<N>`` are reserved for bonds,
+    VLANs and bridges. A replacement interface with a different MAC address
+    needs to be pinned again after the installation, see
+    :ref:`network_override_device_names`.
 
 - *Management Bond*
 
@@ -342,7 +344,8 @@ following settings for the management network.
     configuration on the switch, while the *802.3ad* mode requires switch ports
     configured for LACP. The *Hash Policy* applies to the *802.3ad* and
     *balance-xor* modes, and the optional *Primary Interface* to the
-    *active-backup* mode, where it is preferred as the active interface.
+    *active-backup* mode, where it is preferred as the active interface. Enter
+    the primary interface by its name as listed under *Bond Interfaces*.
 
 - *Management VLAN*
 
