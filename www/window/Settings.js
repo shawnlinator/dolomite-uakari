@@ -28,7 +28,7 @@ Ext.define('PBS.window.Settings', {
             let sp = Ext.state.Manager.getProvider();
 
             let username = sp.get('login-username') || Proxmox.Utils.noneText;
-            me.lookupReference('savedUserName').setValue(Ext.String.htmlEncode(username));
+            me.lookupReference('savedUserName').setValue(username);
 
             let summarycolumns = sp.get('summarycolumns', 'auto');
             me.lookup('summarycolumns').setValue(summarycolumns);
