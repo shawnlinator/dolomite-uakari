@@ -1468,7 +1468,7 @@ fn lookup_dynamic_entries(
         };
         indices.push(reusable_dynamic_entry);
 
-        if range.end < end {
+        if range.end <= end {
             padding_end = end - range.end;
             break;
         }
@@ -2185,6 +2185,48 @@ mod tests {
         assert!(indices[0].same_indexed_chunk_as(&indices[0]));
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn lookup_dynamic_entries_range_end_check() {
+        use pbs_datastore::dynamic_index::{DynamicIndexReader, DynamicIndexWriter};
+
+        let testdir = create_testdir("lookup_dynamic_entries_range_end_check")
+            .expect("Should be able to create test dir");
+        let path = testdir.join("lookup_dynamic_entries.didx");
+        let _ = std::fs::remove_file(&path);
+
+        let mut writer = DynamicIndexWriter::create(&path).unwrap();
+        writer.add_chunk(1024, &[0xAAu8; 32]).unwrap();
+        writer.add_chunk(2048, &[0xBBu8; 32]).unwrap();
+        writer.add_chunk(3072, &[0xCCu8; 32]).unwrap();
+        let _csum = writer.close().unwrap();
+
+        let reader = DynamicIndexReader::open(&path).unwrap();
+        for (range, count, start_padding, end_padding) in [
+            (0..1024, 1, 0, 0),
+            (16..1024, 1, 16, 0),
+            (0..1000, 1, 0, 24),
+            (1024..2048, 1, 0, 0),
+            (0..2048, 2, 0, 0),
+            (0..2049, 3, 0, 1023),
+        ] {
+            let (indices, start, end) = super::lookup_dynamic_entries(&reader, &range).unwrap();
+            assert_eq!(
+                indices.len(),
+                count,
+                "incorrect chunk count: got {}, expected {count} for {range:?}",
+                indices.len(),
+            );
+            assert_eq!(
+                start, start_padding,
+                "incorrect start padding: got {start}, expected {start_padding} for {range:?}"
+            );
+            assert_eq!(
+                end, end_padding,
+                "incorrect end padding: got {end}, expected {end_padding} for {range:?}"
+            );
+        }
     }
 
     /// Inversions that span cache ranges must be caught by the global tracking; a per-range
