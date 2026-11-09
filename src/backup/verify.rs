@@ -221,6 +221,7 @@ impl VerifyWorker {
         }
 
         reader_pool.complete()?;
+        decoder_pool.complete()?;
 
         let elapsed = verify_state.start_time.elapsed().as_secs_f64();
 
