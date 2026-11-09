@@ -89,6 +89,7 @@ Ext.define('PBS.window.CreateZFS', {
             xtype: 'displayfield',
             padding: '5 0 0 0',
             userCls: 'pmx-hint',
+            htmlEncode: false,
             value:
                 'Note: ZFS is not compatible with disks backed by a hardware ' +
                 'RAID controller. For details see ' +
