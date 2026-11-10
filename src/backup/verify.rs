@@ -441,14 +441,12 @@ impl VerifyWorker {
 
         let mut verify_result = VerifyState::Ok;
         for info in manifest.files() {
-            let result = proxmox_lang::try_block!({
-                info!("  check {}", info.filename);
-                match info.filename.archive_type() {
-                    ArchiveType::FixedIndex => self.verify_fixed_index(backup_dir, info),
-                    ArchiveType::DynamicIndex => self.verify_dynamic_index(backup_dir, info),
-                    ArchiveType::Blob => Self::verify_blob(backup_dir, info),
-                }
-            });
+            info!("  check {}", info.filename);
+            let result = match info.filename.archive_type() {
+                ArchiveType::FixedIndex => self.verify_fixed_index(backup_dir, info),
+                ArchiveType::DynamicIndex => self.verify_dynamic_index(backup_dir, info),
+                ArchiveType::Blob => Self::verify_blob(backup_dir, info),
+            };
 
             self.worker.check_abort()?;
             self.worker.fail_on_shutdown()?;
