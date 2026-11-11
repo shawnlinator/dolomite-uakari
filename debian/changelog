@@ -1,3 +1,74 @@
+rust-proxmox-backup (4.2.11-1) trixie; urgency=medium
+
+  * fix #6990: sync: drop the verify state of snapshots on push and on pull
+    jobs without decryption, so that the target copy gets verified on its own
+    storage instead of inheriting the state of the source. A state the target
+    obtained itself is kept, unless archives had to be re-synced, and an
+    unchanged source still takes the fast path on repeated syncs.
+
+  * sync: pull: run file renames and the cleanup of unreferenced files on the
+    blocking thread pool, so that they do not stall other tasks.
+
+  * partially fix #6933: allow setting the ZFS recordsize when creating a ZFS
+    datastore in the web interface and with proxmox-backup-manager.
+
+  * fix #7933: ui: datastore summary: show the S3 endpoint and bucket of
+    datastores with an S3 backend. Also parse the backend configuration with
+    its default key, so that the shorthand 's3,client=...' notation no longer
+    leaves the endpoint empty and hides the S3 refresh button.
+
+  * fix #7964: tape: make the barcode-label task abortable. The abort request
+    is checked before each tape gets loaded and before its label gets written,
+    a running load or write still completes.
+
+  * fix #8186: pxar: fix an off-by-one error in the dynamic entry range check
+    with change-detection-mode metadata, which could re-encode files that were
+    unchanged and could have been reused.
+
+  * verify: wait for the decoder pool to complete before fetching the error
+    state, fixing a race with still ongoing chunk verification that could
+    record a wrong verification state for a snapshot.
+
+  * pbs-key-config: distinguish plain and password protected keys when
+    checking the key data length, and report an unexpected length of password
+    protected key data with a clear error instead of hinting at a wrong
+    password.
+
+  * ui: add buttons to open the prune simulator and the LTO barcode generator
+    from the prune job view and the tape media inventory.
+
+  * ui: avoid double HTML encoding of the username in the settings window and
+    of the ZFS warnings, which broke the link embedded in the warning.
+
+  * docs: installer: note the reserved pinned interface names, the name of the
+    primary interface of a bond and that replaced interfaces need to be
+    pinned again.
+
+  * fix #6738: rest-server: log clients that close the connection before the
+    TLS handshake check completes at debug level only, as health checks and
+    port scanners flooded the log with errors. Also do not drop clients that
+    send the first bytes of their request in more than one chunk.
+
+  * s3-client: fix the sorting of canonical headers and query parameters for
+    the AWS signature v4, which could result in rejected requests due to
+    signature mismatches.
+
+  * s3-client: re-sign requests on every retry with the current time, so that
+    retries after a long back-off do not fail with RequestTimeTooSkewed.
+
+  * fix #7814: notify: smtp: normalize the line endings of forwarded mails to
+    CRLF, as strict SMTP relays reject the LF line endings that postfix hands
+    over for locally delivered mail.
+
+  * fix #8127: notify: fix the description of the match-calendar option of
+    notification matchers.
+
+  * sys: also sync the parent directory when replacing a file with fsync
+    requested, so that the new manifest or configuration file cannot be
+    reverted by a power loss right after the write returned.
+
+ -- Proxmox Support Team <support@proxmox.com>  Wed, 11 Nov 2026 23:49:35 +0100
+
 rust-proxmox-backup (4.2.10-1) trixie; urgency=medium
 
   * ui: datastore.cfg: fix default value of max-snapshot-time-skew
