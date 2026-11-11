@@ -16,6 +16,14 @@ use pbs_tools::crypt_config::CryptConfig;
 
 const EXPECTED_KEY_LEN: usize = 32;
 
+/// Length of the AES-256-GCM IV prepended to a password protected key.
+const IV_LEN: usize = 16;
+/// Length of the AES-256-GCM tag stored after the IV of a password protected key.
+const TAG_LEN: usize = 16;
+/// Length of the data of a password protected key: IV, tag and the encrypted key, which has the
+/// same length as the plain one.
+const ENCRYPTED_KEY_LEN: usize = IV_LEN + TAG_LEN + EXPECTED_KEY_LEN;
+
 /// Key derivation function configuration
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum KeyDerivationConfig {
@@ -150,8 +158,8 @@ impl KeyConfig {
 
         let cipher = openssl::symm::Cipher::aes_256_gcm();
 
-        let iv = proxmox_sys::linux::random_data(16)?;
-        let mut tag = [0u8; 16];
+        let iv = proxmox_sys::linux::random_data(IV_LEN)?;
+        let mut tag = [0u8; TAG_LEN];
 
         let encrypted_key =
             openssl::symm::encrypt_aead(cipher, &derived_key, Some(&iv), b"", raw_key, &mut tag)?;
@@ -186,9 +194,9 @@ impl KeyConfig {
                 "unexpected key length ({} != {EXPECTED_KEY_LEN})",
                 key_config.data.len()
             )
-        } else if key_config.kdf.is_some() && key_config.data.len() < EXPECTED_KEY_LEN {
+        } else if key_config.kdf.is_some() && key_config.data.len() != ENCRYPTED_KEY_LEN {
             bail!(
-                "unexpected short data for key ({} < {EXPECTED_KEY_LEN})",
+                "unexpected encrypted key length ({} != {ENCRYPTED_KEY_LEN})",
                 key_config.data.len()
             );
         }
@@ -211,12 +219,15 @@ impl KeyConfig {
 
             let derived_key = kdf.derive_key(&passphrase)?;
 
-            if raw_data.len() < EXPECTED_KEY_LEN + 1 {
-                bail!("Unable to decrypt key - short data");
+            if raw_data.len() != ENCRYPTED_KEY_LEN {
+                bail!(
+                    "Unable to decrypt key - unexpected data length {} (expected {ENCRYPTED_KEY_LEN})",
+                    raw_data.len()
+                );
             }
-            let iv = &raw_data[0..16];
-            let tag = &raw_data[16..32];
-            let enc_data = &raw_data[32..];
+            let iv = &raw_data[..IV_LEN];
+            let tag = &raw_data[IV_LEN..IV_LEN + TAG_LEN];
+            let enc_data = &raw_data[IV_LEN + TAG_LEN..];
 
             let cipher = openssl::symm::Cipher::aes_256_gcm();
 
