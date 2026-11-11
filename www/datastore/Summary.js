@@ -160,6 +160,15 @@ Ext.define('PBS.DataStoreS3Stats', {
             },
         },
         {
+            title: gettext('S3 Bucket'),
+            printBar: false,
+            bind: {
+                data: {
+                    text: '{bucket}',
+                },
+            },
+        },
+        {
             xtype: 'box',
             html: `<b>${gettext('S3 traffic:')}</b>`,
             padding: '10 0 5 0',
@@ -564,6 +573,7 @@ Ext.define('PBS.DataStoreSummary', {
                 let backend = PBS.Utils.parsePropertyString(data.backend, 'type');
                 if (backend?.type === 's3') {
                     me.getViewModel().set('client', backend.client);
+                    me.getViewModel().set('bucket', backend.bucket);
                 }
 
                 const removable = !!data['backing-device'];
