@@ -191,6 +191,12 @@ Ext.define('PBS.config.PruneJobView', {
             handler: 'runPruneJob',
             disabled: true,
         },
+        '->',
+        {
+            text: gettext('Prune Simulator'),
+            iconCls: 'fa fa-external-link',
+            href: '/docs/prune-simulator/index.html',
+        },
     ],
 
     viewConfig: {

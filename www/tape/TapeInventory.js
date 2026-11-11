@@ -239,6 +239,12 @@ Ext.define('PBS.TapeManagement.TapeInventory', {
             disabled: true,
             handler: 'remove',
         },
+        '->',
+        {
+            text: gettext('LTO Barcode Generator'),
+            iconCls: 'fa fa-external-link',
+            href: '/docs/lto-barcode/index.html',
+        },
     ],
 
     features: [
