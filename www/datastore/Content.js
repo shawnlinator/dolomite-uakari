@@ -1432,7 +1432,7 @@ Ext.define('PBS.DataStoreContent', {
             success: function (response, options) {
                 let data = response.result.data;
                 if (data.backend) {
-                    let backendConfig = PBS.Utils.parsePropertyString(data.backend);
+                    let backendConfig = PBS.Utils.parsePropertyString(data.backend, 'type');
                     let hasS3Backend = backendConfig.type === 's3';
                     me.down('#moreDropdown').setHidden(!hasS3Backend);
                 }
