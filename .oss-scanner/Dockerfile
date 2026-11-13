@@ -201,7 +201,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
         uuid-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://sh.rustup.rs -o /tmp/rustup-init.sh \
+RUN wget -qO /tmp/rustup-init.sh https://sh.rustup.rs \
     && sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable \
     && . "$HOME/.cargo/env" \
     && rustc --version && cargo --version
